@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import Chat from "./Chat";
 
 const STAGES = [
   { id:"idea",    label:"Идея",       icon:"💡", color:"#f59e0b" },
@@ -47,6 +48,7 @@ function StageBar({stage,onChange}){
         );
       })}
     </div>
+      {chatTask&&<Chat task={chatTask} user={user} users={users} onClose={()=>setChatTask(null)} onMarkRead={markRead}/>}
   );
 }
 
@@ -100,7 +102,7 @@ function Auth({onLogin}){
 }
 
 // ── Task Card (used in calendar and backlog) ──────────────────────────────────
-function TaskCard({t,projOf,userOf,onClick,onStar,draggable,onDragStart}){
+function TaskCard({t,projOf,userOf,onClick,onStar,draggable,onDragStart,onChat,unreadCount}){
   const st=stOf(t.stage),pr=projOf(t.project_id),asgn=userOf(t.assignee_id);
   return(
     <div draggable={draggable} onDragStart={onDragStart}
@@ -118,6 +120,11 @@ function TaskCard({t,projOf,userOf,onClick,onStar,draggable,onDragStart}){
         style={{position:"absolute",top:3,right:3,background:"transparent",border:"none",cursor:"pointer",fontSize:10,color:t.starred?"#f59e0b":"#2d2d44",padding:0,lineHeight:1}}>
         {t.starred?"★":"☆"}
       </button>
+      <button onClick={e=>{e.stopPropagation();onChat();}}
+        style={{position:"absolute",bottom:3,right:3,background:"transparent",border:"none",cursor:"pointer",fontSize:9,color:"#3d3d55",padding:0,lineHeight:1}}>
+        💬
+      </button>
+      {unreadCount>0&&<div style={{position:"absolute",top:-4,left:-4,width:14,height:14,borderRadius:"50%",background:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{unreadCount>9?"9+":unreadCount}</div>}
     </div>
   );
 }
@@ -322,6 +329,8 @@ export default function App(){
   const [users,setUsers]=useState([]);
   const [status,setStatus]=useState("idle");
   const [view,setView]=useState("calendar");
+  const [chatTask,setChatTask]=useState(null);
+  const [unread,setUnread]=useState({});
   const [calMode,setCalMode]=useState("month"); // month | week
 
   const [year,setYear]=useState(new Date().getFullYear());
@@ -338,6 +347,7 @@ export default function App(){
   const [addProj,setAddProj]=useState(false);
   const [showAdmin,setShowAdmin]=useState(false);
   const [dragTask,setDragTask]=useState(null);
+  const [dragOver,setDragOver]=useState(null);
   const [nt,setNt]=useState({title:"",description:"",project_id:"",stage:"idea",assignee_id:"",day:null});
   const [np,setNp]=useState({label:"",color:PCOLORS[0]});
 
@@ -351,10 +361,22 @@ export default function App(){
       setTasks(Array.isArray(t)?t:[]);
       setUsers(Array.isArray(u)?u:[]);
       setStatus("ready");
+      // Load unread counts
+      try {
+        const ur = await api(`/api/unread/${u.id}`);
+        // u here is currentUser - we pass it separately
+      } catch {}
     }catch(e){setStatus("error");}
   },[]);
 
-  const handleLogin=useCallback(u=>{setUser(u);load();},[load]);
+  const handleLogin=useCallback(async u=>{
+    setUser(u);
+    load();
+    try { const ur=await api(`/api/unread/${u.id}`); setUnread(ur||{}); } catch {}
+  },[load]);
+  const markRead=(taskId)=>{
+    setUnread(prev=>({...prev,[taskId]:0}));
+  };
   const handleLogout=()=>{setUser(null);setProjects([]);setTasks([]);setUsers([]);setStatus("idle");};
 
   if(!user)return <Auth onLogin={handleLogin}/>;
@@ -540,9 +562,10 @@ export default function App(){
                   return(
                     <div key={day}
                       onClick={()=>{setAddDay(day);setNt({...emptyTask(),day:dk});}}
-                      onDragOver={e=>e.preventDefault()}
-                      onDrop={()=>handleDrop(dk)}
-                      style={{minHeight:90,background:isTd?"#0f0f1e":"#111118",border:isTd?"1px solid #7c3aed":"1px solid #1e1e2e",borderRadius:7,padding:"5px 5px 4px",cursor:"pointer"}}
+                      onDragOver={e=>{e.preventDefault();setDragOver(dk);}}
+                      onDragLeave={()=>setDragOver(null)}
+                      onDrop={()=>{handleDrop(dk);setDragOver(null);}}
+                      style={{minHeight:90,background:dragOver===dk?"#1a1a35":isTd?"#0f0f1e":"#111118",border:dragOver===dk?"1px solid #7c3aed55":isTd?"1px solid #7c3aed":"1px solid #1e1e2e",borderRadius:7,padding:"5px 5px 4px",cursor:"pointer",transition:"all 0.15s"}}
                       onMouseEnter={e=>e.currentTarget.style.borderColor=isTd?"#9d6fef":"#3d3d5c"}
                       onMouseLeave={e=>e.currentTarget.style.borderColor=isTd?"#7c3aed":"#1e1e2e"}>
                       <div style={{fontSize:10,color:isTd?"#a78bfa":"#2d2d44",fontWeight:isTd?800:500,marginBottom:3,fontFamily:"'JetBrains Mono',monospace",display:"flex",alignItems:"center",gap:2}}>
@@ -552,6 +575,8 @@ export default function App(){
                         <TaskCard key={t.id} t={t} projOf={projOf} userOf={userOf}
                           onClick={()=>setDetail({...t})}
                           onStar={()=>doStar(t.id)}
+                          onChat={()=>setChatTask(t)}
+                          unreadCount={unread[t.id]||0}
                           draggable onDragStart={()=>setDragTask(t.id)}/>
                       ))}
                       {dt.length>3&&<div style={{fontSize:8,color:"#2d2d44",fontFamily:"'JetBrains Mono',monospace"}}>+{dt.length-3}</div>}
@@ -598,6 +623,8 @@ export default function App(){
                           <TaskCard key={t.id} t={t} projOf={projOf} userOf={userOf}
                             onClick={()=>setDetail({...t})}
                             onStar={()=>doStar(t.id)}
+                            onChat={()=>setChatTask(t)}
+                            unreadCount={unread[t.id]||0}
                             draggable onDragStart={()=>setDragTask(t.id)}/>
                         ))}
                       </div>
@@ -759,7 +786,10 @@ export default function App(){
                       {users.map(u=><option key={u.id} value={u.id}>@{u.telegram}</option>)}
                     </select></div>
                 </div>
-                <button onClick={()=>doDelete(detail.id)} style={{background:"transparent",border:"1px solid #ef444430",borderRadius:8,padding:"7px",color:"#ef4444",cursor:"pointer",fontSize:11,fontFamily:"'Syne',sans-serif"}}>Удалить рилс</button>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{setChatTask(detail);setDetail(null);}} style={{flex:1,background:"#1a1a2e",border:"1px solid #2d2d44",borderRadius:8,padding:"7px",color:"#a78bfa",cursor:"pointer",fontSize:12,fontFamily:"'Syne',sans-serif",fontWeight:600}}>💬 Открыть чат {(unread[detail.id]||0)>0&&<span style={{background:"#ef4444",borderRadius:10,padding:"1px 5px",fontSize:10,color:"#fff",marginLeft:4}}>{unread[detail.id]}</span>}</button>
+                  <button onClick={()=>doDelete(detail.id)} style={{flex:1,background:"transparent",border:"1px solid #ef444430",borderRadius:8,padding:"7px",color:"#ef4444",cursor:"pointer",fontSize:11,fontFamily:"'Syne',sans-serif"}}>Удалить</button>
+                </div>
               </div>
             </div>
           )}
