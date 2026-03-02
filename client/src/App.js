@@ -68,7 +68,6 @@ function AuthScreen({ onLogin }) {
     try {
       const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
       const user = await apiFetch(endpoint, { method: "POST", body: form });
-      localStorage.setItem("cf_user", JSON.stringify(user));
       onLogin(user);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -159,7 +158,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks]       = useState([]);
   const [users, setUsers]       = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading]   = useState(false);
   const [saving, setSaving]     = useState(false);
 
   const [addingDay, setAddingDay]   = useState(null);
@@ -177,13 +176,20 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
+    setLoading(true);
     Promise.all([apiFetch("/api/projects"), apiFetch("/api/tasks"), apiFetch("/api/users")])
       .then(([p, t, u]) => { setProjects(p); setTasks(t); setUsers(u); })
-      .catch(console.error)
+      .catch(err => {
+        console.error("Load error:", err);
+        setProjects([]); setTasks([]); setUsers([]);
+      })
       .finally(() => setLoading(false));
   }, [currentUser]);
 
-  const handleLogin = (user) => setCurrentUser(user);
+  const handleLogin = (user) => {
+    localStorage.setItem("cf_user", JSON.stringify(user));
+    setCurrentUser(user);
+  };
   const handleLogout = () => { localStorage.removeItem("cf_user"); setCurrentUser(null); };
 
   if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
