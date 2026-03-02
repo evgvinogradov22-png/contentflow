@@ -317,7 +317,7 @@ app.post("/api/upload/presign", async (req, res) => {
     const key = `tasks/${task_id}/${uuidv4()}.${ext}`;
     const cmd = new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, ContentType: content_type });
     const upload_url = await getSignedUrl(R2, cmd, { expiresIn: 3600 });
-    const file_url = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/${key}`;
+    const file_url = `https://pub-3dd93ace78394e159c4cd843d4a6e876.r2.dev/${key}`;
     res.json({ upload_url, key, file_url });
   } catch(e) { console.error(e); res.status(500).json({ error: "Ошибка получения URL: " + e.message }); }
 });
