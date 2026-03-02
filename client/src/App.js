@@ -48,7 +48,6 @@ function StageBar({stage,onChange}){
         );
       })}
     </div>
-      {chatTask&&<Chat task={chatTask} user={user} users={users} onClose={()=>setChatTask(null)} onMarkRead={markRead}/>}
   );
 }
 
@@ -814,6 +813,7 @@ export default function App(){
           )}
         </div>
       )}
+      {chatTask&&<Chat task={chatTask} user={user} users={users} onClose={()=>setChatTask(null)} onMarkRead={markRead}/>}
     </div>
   );
 }
